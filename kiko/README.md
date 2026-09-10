@@ -51,9 +51,31 @@ Tracker maintenance: `python -m kiko add "Math" "Worksheet 4.2" 2026-09-11`, `py
 
 State lives in `KIKO_DATA_DIR` (default `~/.kiko`): `homework.json` (assignments, daily ledger, Qustodio flag), `budget.json`, and `chat/<channel>.jsonl` transcripts. Kiko reads the transcripts back on every turn, which is how it keeps up with the group chat between sessions.
 
-## Wiring a real chat app
+## Running on iMessage (macOS)
 
-`channels.Transport` is one method, `send(channel, text)`. Implement it for WhatsApp, Telegram, iMessage, or whatever the family uses, pass it to `KikoAgent(transport=...)`, and feed incoming messages to `agent.respond(channel, sender, text)`. The CLI is that loop with the console as the transport.
+Kiko needs its own Apple ID signed into Messages.app on a Mac that stays on, and the terminal running it needs Full Disk Access (System Settings, Privacy and Security) so it can read `~/Library/Messages/chat.db`.
+
+1. Find the family group's chat GUID: `sqlite3 ~/Library/Messages/chat.db "select guid, display_name from chat"` and pick the `iMessage;+;chat...` row for the group (and one for the parents' chat if it is a group).
+2. Export the addresses:
+
+```bash
+export KIKO_IMSG_GROUP="iMessage;+;chat123456789012345678"   # George, parents, Kiko
+export KIKO_IMSG_PARENTS="iMessage;+;chat987654321098765432"  # parents only (or one parent's handle)
+export KIKO_IMSG_GEORGE="+15550001"                            # George's number or iCloud email
+export KIKO_IMSG_MARKOS="+15550002"                            # the Qustodio admin
+export KIKO_IMSG_CONTACTS="+15550001=George,+15550002=Markos,tina@icloud.com=Tina"
+python -m kiko imessage --poll 5
+```
+
+Kiko then answers new messages in each mapped chat in that chat's voice, ignores chats it is not configured for, ignores history from before it started, and opens the one-on-one with George at `KIKO_CHECKIN_TIME`. Incoming text is read from `message.text`, with a fallback decoder for the `attributedBody` blob newer macOS versions use.
+
+## Other chat apps
+
+`channels.Transport` is one method, `send(channel, text)`. Implement it for WhatsApp or Telegram, pass it to `KikoAgent(transport=...)`, and feed incoming messages to `agent.respond(channel, sender, text)`. `imessage.py` is a complete example of both halves.
+
+## Feeding assignments from the school portal
+
+Kiko does not scrape the school system. Whatever already produces the assignment names and statuses (the existing Kiko feed, a Schoology or Google Classroom export, an email digest) should be written as CSV with columns `subject,title,due[,notes]` and loaded with `python -m kiko import file.csv`; re-importing is safe, duplicates are skipped. Mark completions with `python -m kiko done <id>` when the portal shows them submitted, so the tracker never lags the school's record.
 
 ## Configuration
 
@@ -68,6 +90,9 @@ State lives in `KIKO_DATA_DIR` (default `~/.kiko`): `homework.json` (assignments
 | `KIKO_TOP_CALLS_PER_DAY` | 30 | daily cap |
 | `KIKO_CHECKIN_TIME` | 16:30 | afternoon check-in |
 | `KIKO_DATA_DIR` | `~/.kiko` | state directory |
+| `KIKO_IMSG_GROUP`, `KIKO_IMSG_PARENTS` | | iMessage chat GUIDs |
+| `KIKO_IMSG_GEORGE`, `KIKO_IMSG_MARKOS` | | iMessage handles |
+| `KIKO_IMSG_CONTACTS` | | `handle=Name,...` |
 
 ## Tests
 

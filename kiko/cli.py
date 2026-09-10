@@ -14,6 +14,7 @@
     python -m kiko qustodio blocked|unblocked
     python -m kiko seed               demo assignments on a fresh install
     python -m kiko serve              loop forever, check-in daily at KIKO_CHECKIN_TIME
+    python -m kiko imessage           macOS: poll Messages.app, reply on iMessage, daily check-in
 """
 
 from __future__ import annotations
@@ -49,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("qustodio").add_argument("state", choices=["blocked", "unblocked"])
     sub.add_parser("seed")
     sub.add_parser("serve")
+    im = sub.add_parser("imessage"); im.add_argument("--poll", type=float, default=5.0); im.add_argument("--db", default=None)
     args = ap.parse_args(argv)
 
     cfg = KikoConfig()
@@ -108,6 +110,15 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "serve":
         from .scheduler import run_forever
         run_forever(agent)
+    elif args.cmd == "imessage":
+        from .imessage import DEFAULT_CHAT_DB, IMessageAddresses, IMessageTransport
+        from .scheduler import run_imessage_loop
+        addresses = IMessageAddresses.from_env()
+        if not addresses.group or not addresses.george:
+            print("Set KIKO_IMSG_GROUP (chat GUID) and KIKO_IMSG_GEORGE (handle) first; see kiko/README.md.")
+            return 2
+        agent = KikoAgent(cfg, transport=IMessageTransport(addresses))
+        run_imessage_loop(agent, addresses, Path(args.db) if args.db else DEFAULT_CHAT_DB, poll_seconds=args.poll)
     return 0
 
 
